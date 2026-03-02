@@ -1,0 +1,86 @@
+
+# Connect Four – Network Architecture (Swimlane Sequence Diagram)
+
+Legend:
+- POST, GET: HTTP request types from client to server
+- Functions shown in CAPS are HTTP endpoint handlers (e.g., handle_join)
+- Functions shown in camelCase are client API wrappers
+
+Client A            Server (BaseHTTPRequestHandler)         SQLite DB             Client B
+   |                           |                               |                      |
+   | join(name)               |                               |                      |
+   |------------------------->|                               |                      |
+   | POST /join               |-- handle_join() ------------->|                      |
+   |                          | create session_id             |                      |
+   |                          |<------------------------------|                      |
+   |<-------------------------| JSON { session_id }           |                      |
+   |                           |                               |                      |
+   |                           |                               |                      |
+   |                           |                               |<-- join(name)       |
+   |                           |                               |                      |
+   |<-------------------------|<------------------------------|                      |
+   |                           |                               |                      |
+   | request_game()           |                               |                      |
+   |------------------------->|                               |                      |
+   | POST /request_game       |-- handle_request_game() ----->|                      |
+   |                          | updates game_requests dict    |                      |
+   |                          |<------------------------------|                      |
+   |<-------------------------| JSON { status: "sent" }       |                      |
+   |                           |                               |                      |
+   |                           |                               |                      |
+   |                           |<------------------------------| check_requests()    |
+   |                           |<------------------------------| POST /check_requests|
+   |                          |-- handle_check_requests() --> |                      |
+   |                          | read from game_requests       |                      |
+   |                          |<------------------------------|                      |
+   |<-------------------------| JSON { from: A, session_id }  |                      |
+   |                           |                               |                      |
+   | respond_request()        |                               |                      |
+   |------------------------->|                               |                      |
+   | POST /respond_request    |-- handle_respond_request() -->|                      |
+   |                          | update accepted_request_pairs |                      |
+   |                          |<------------------------------|                      |
+   |<-------------------------| JSON { status: "recorded" }   |                      |
+   |                           |                               |                      |
+   |                           |<------------------------------| check_setup_ready() |
+   |<-------------------------| JSON { ready: true }          |                      |
+   |                           |                               |                      |
+   | mark_pending_setup()     |                               |                      |
+   |------------------------->|                               |                      |
+   | POST /mark_pending_setup |-- handle_mark_pending_setup() |                      |
+   |                          | store setup_sessions[key]     |                      |
+   |<-------------------------| JSON { status: "ok" }         |                      |
+   |                           |                               |                      |
+   | update_setup_config()    |                               | update_setup_config()|
+   |------------------------->|                               |<---------------------|
+   | POST /update_setup_config|-- handle_update_setup_config()|                      |
+   |                          | save colors/rows/cols         |                      |
+   |<-------------------------| JSON { status: "updated" }    |                      |
+   |                           |                               |                      |
+   | accept_game()            |                               |                      |
+   |------------------------->|                               |                      |
+   | POST /accept_game        |-- handle_accept_game() ------>|                      |
+   |                          | create game_id                |                      |
+   |                          | store in games{}              |                      |
+   |<-------------------------| JSON { game_id, names, colors}|                      |
+   |                           |                               |                      |
+   | start_game()             |                               |                      |
+   |------------------------->|                               |                      |
+   | POST /start_game         |-- handle_start_game() ------->|                      |
+   |                          | mark game as started          |                      |
+   |<-------------------------| JSON { status: "game_started"}|                      |
+   |                           |                               |                      |
+   |<---------------------------------------------------------| check_pending_game() |
+   |<-------------------------| JSON { board + players info } |                      |
+   |                           |                               |                      |
+   | handle_click()           |                               |                      |
+   |------------------------->|                               |                      |
+   | POST /submit_move        |-- handle_submit_move() ------>| INSERT INTO moves    |
+   |                          | updates game state            |                      |
+   |                          |<------------------------------|                      |
+   |<-------------------------| JSON { status: "move recorded"}|                     |
+   |                           |                               |                      |
+   | poll_for_moves()         |------------------------------>|                      |
+   | GET /game_state          | get_game_state()              |                      |
+   |                          | read game moves               |                      |
+   |<-------------------------| JSON { moves, names }         |                      |
